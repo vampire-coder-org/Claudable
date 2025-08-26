@@ -33,19 +33,22 @@ PROJECT_ROOT = find_project_root()
 
 class Settings(BaseModel):
     api_port: int = int(os.getenv("API_PORT", "8080"))
-    
+
     # SQLite database URL
     database_url: str = os.getenv(
         "DATABASE_URL",
         f"sqlite:///{PROJECT_ROOT / 'data' / 'cc.db'}",
     )
-    
+
     # Use project root relative paths
     projects_root: str = os.getenv("PROJECTS_ROOT", str(PROJECT_ROOT / "data" / "projects"))
     projects_root_host: str = os.getenv("PROJECTS_ROOT_HOST", os.getenv("PROJECTS_ROOT", str(PROJECT_ROOT / "data" / "projects")))
-    
+
     preview_port_start: int = int(os.getenv("PREVIEW_PORT_START", "3100"))
     preview_port_end: int = int(os.getenv("PREVIEW_PORT_END", "3999"))
+
+    # CORS configuration
+    cors_origins: str = os.getenv("CORS_ORIGINS", "")
 
 
 settings = Settings()
