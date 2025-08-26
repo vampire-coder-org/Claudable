@@ -52,28 +52,32 @@ class LogFilterMiddleware(BaseHTTPMiddleware):
 app.add_middleware(LogFilterMiddleware)
 
 # CORS configuration - supports both development and production
-cors_origins = os.getenv("CORS_ORIGINS", "")
-debug_cors = os.getenv("DEBUG_CORS", "false").lower() == "true"
+def get_cors_config():
+    """Get CORS configuration based on environment"""
+    cors_origins = os.getenv("CORS_ORIGINS", "")
+    debug_cors = os.getenv("DEBUG_CORS", "false").lower() == "true"
 
-if debug_cors:
-    # Debug mode: allow all origins (ONLY for debugging)
-    allowed_origins = ["*"]
-    print("⚠️  DEBUG MODE: CORS allows ALL origins - DO NOT use in production!")
-elif cors_origins:
-    # Production: use specific origins from environment
-    allowed_origins = [origin.strip() for origin in cors_origins.split(",")]
-    print(f"🔒 CORS configured for production origins: {allowed_origins}")
-else:
-    # Development: allow common local development origins
-    allowed_origins = [
-        "http://localhost:3000",
-        "http://localhost:3001",
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:3001",
-        "http://localhost:8080",  # In case frontend calls from same port
-        "http://127.0.0.1:8080"
-    ]
-    print(f"🔧 CORS configured for local development: {allowed_origins}")
+    if debug_cors:
+        # Debug mode: allow all origins (ONLY for debugging)
+        return ["*"], "debug"
+    elif cors_origins:
+        # Production: use specific origins from environment
+        origins = [origin.strip() for origin in cors_origins.split(",")]
+        return origins, "production"
+    else:
+        # Development: allow common local development origins
+        origins = [
+            "http://localhost:3000",
+            "http://localhost:3001",
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:3001",
+            "http://localhost:8080",  # In case frontend calls from same port
+            "http://127.0.0.1:8080"
+        ]
+        return origins, "development"
+
+# Get CORS configuration
+allowed_origins, cors_mode = get_cors_config()
 
 app.add_middleware(
     CORSMiddleware,
@@ -104,6 +108,20 @@ def health():
     return {"ok": True}
 
 
+@app.get("/cors-config")
+def cors_config():
+    """Get current CORS configuration for debugging"""
+    cors_origins = os.getenv("CORS_ORIGINS", "")
+    debug_cors = os.getenv("DEBUG_CORS", "false").lower() == "true"
+
+    return {
+        "cors_origins_env": cors_origins,
+        "debug_cors": debug_cors,
+        "allowed_origins": allowed_origins,
+        "cors_mode": cors_mode
+    }
+
+
 @app.on_event("startup")
 def on_startup() -> None:
     # Auto create tables if not exist; production setups should use Alembic
@@ -111,22 +129,31 @@ def on_startup() -> None:
     inspector = inspect(engine)
     Base.metadata.create_all(bind=engine)
     ui.success("Database initialization complete")
-    
+
+    # Show CORS configuration
+    if cors_mode == "debug":
+        ui.warning("⚠️  DEBUG MODE: CORS allows ALL origins - DO NOT use in production!")
+    elif cors_mode == "production":
+        ui.info(f"🔒 CORS configured for production origins: {allowed_origins}")
+    else:
+        ui.info(f"🔧 CORS configured for local development: {allowed_origins}")
+
     # Show available endpoints
     ui.info("API server ready")
     ui.panel(
-        "WebSocket: /api/chat/{project_id}\nREST API: /api/projects, /api/chat, /api/github, /api/vercel",
+        "WebSocket: /api/chat/{project_id}\nREST API: /api/projects, /api/chat, /api/github, /api/vercel\nCORS Config: /cors-config",
         title="Available Endpoints",
         style="green"
     )
-    
+
     # Display ASCII logo after all initialization is complete
     ui.ascii_logo()
-    
+
     # Show environment info
     env_info = {
         "Environment": os.getenv("ENVIRONMENT", "development"),
         "Debug": os.getenv("DEBUG", "false"),
-        "Port": os.getenv("PORT", "8000")
+        "Port": os.getenv("PORT", "8000"),
+        "CORS Mode": cors_mode
     }
     ui.status_line(env_info)
