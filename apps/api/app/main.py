@@ -24,9 +24,17 @@ configure_logging()
 
 app = FastAPI(title="Clovable API")
 
-# Middleware to suppress logging for specific endpoints
+# Middleware to suppress logging for specific endpoints and debug CORS
 class LogFilterMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
+        # Debug CORS requests
+        if os.getenv("DEBUG_CORS", "false").lower() == "true":
+            origin = request.headers.get("origin")
+            if origin:
+                print(f"🌐 CORS Request from origin: {origin}")
+                print(f"   Method: {request.method}")
+                print(f"   Path: {request.url.path}")
+
         # Suppress logging for polling endpoints
         if "/requests/active" in request.url.path:
             import logging
@@ -44,32 +52,36 @@ class LogFilterMiddleware(BaseHTTPMiddleware):
 app.add_middleware(LogFilterMiddleware)
 
 # CORS configuration - supports both development and production
-def get_cors_origins():
-    """Get allowed CORS origins from environment or use defaults"""
-    cors_origins = os.getenv("CORS_ORIGINS", "")
+cors_origins = os.getenv("CORS_ORIGINS", "")
+debug_cors = os.getenv("DEBUG_CORS", "false").lower() == "true"
 
-    if cors_origins:
-        # Production: use specific origins from environment
-        origins = [origin.strip() for origin in cors_origins.split(",")]
-        ui.info(f"CORS configured for origins: {origins}")
-        return origins
-    else:
-        # Development: allow common local development origins
-        default_origins = [
-            "http://localhost:3000",
-            "http://localhost:3001",
-            "http://127.0.0.1:3000",
-            "http://127.0.0.1:3001"
-        ]
-        ui.info("CORS configured for local development")
-        return default_origins
+if debug_cors:
+    # Debug mode: allow all origins (ONLY for debugging)
+    allowed_origins = ["*"]
+    print("⚠️  DEBUG MODE: CORS allows ALL origins - DO NOT use in production!")
+elif cors_origins:
+    # Production: use specific origins from environment
+    allowed_origins = [origin.strip() for origin in cors_origins.split(",")]
+    print(f"🔒 CORS configured for production origins: {allowed_origins}")
+else:
+    # Development: allow common local development origins
+    allowed_origins = [
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:3001",
+        "http://localhost:8080",  # In case frontend calls from same port
+        "http://127.0.0.1:8080"
+    ]
+    print(f"🔧 CORS configured for local development: {allowed_origins}")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=get_cors_origins(),
+    allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-    allow_headers=["*"]
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD"],
+    allow_headers=["*"],
+    expose_headers=["*"]
 )
 
 # Routers
