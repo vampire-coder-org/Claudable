@@ -19,6 +19,36 @@ from app.db.base import Base
 import app.models  # noqa: F401 ensures models are imported for metadata
 from app.db.session import engine
 import os
+from pathlib import Path
+
+# Load environment variables from .env.local and .env files
+def load_env_files():
+    """Load environment variables from .env.local and .env files"""
+    try:
+        from dotenv import load_dotenv
+
+        # Find project root (go up from apps/api to project root)
+        current_dir = Path(__file__).resolve().parent.parent.parent.parent
+
+        # Load .env.local first (higher priority)
+        env_local_path = current_dir / ".env.local"
+        if env_local_path.exists():
+            load_dotenv(env_local_path, override=True)
+            print(f"✅ Loaded environment from {env_local_path}")
+
+        # Load .env file (lower priority)
+        env_path = current_dir / ".env"
+        if env_path.exists():
+            load_dotenv(env_path, override=False)  # Don't override .env.local values
+            print(f"✅ Loaded environment from {env_path}")
+
+    except ImportError:
+        print("⚠️  python-dotenv not installed, using system environment variables only")
+    except Exception as e:
+        print(f"⚠️  Error loading environment files: {e}")
+
+# Load environment files before configuring the app
+load_env_files()
 
 configure_logging()
 
